@@ -1,4 +1,5 @@
 import { EnhancedMode } from "./loop";
+import { ImageAttachment } from "@/utils/MessageQueue2";
 import { query, type QueryOptions, type SDKMessage, type SDKSystemMessage, AbortError, SDKUserMessage } from '@/claude/sdk'
 import { mapToClaudeMode } from "./utils/permissionMode";
 import { claudeCheckSession } from "./utils/claudeCheckSession";
@@ -30,7 +31,7 @@ export async function claudeRemote(opts: {
     jsRuntime?: JsRuntime,
 
     // Dynamic parameters
-    nextMessage: () => Promise<{ message: string, mode: EnhancedMode } | null>,
+    nextMessage: () => Promise<{ message: string, mode: EnhancedMode, images?: ImageAttachment[] } | null>,
     onReady: () => void,
     isAborted: (toolCallId: string) => boolean,
 
@@ -145,13 +146,33 @@ export async function claudeRemote(opts: {
         }
     };
 
+    // Build content with optional images
+    function buildContent(text: string, images?: ImageAttachment[]): string | Array<any> {
+        if (!images || images.length === 0) {
+            return text;
+        }
+        const content: Array<any> = [];
+        for (const img of images) {
+            content.push({
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: img.mediaType || 'image/png',
+                    data: img.base64
+                }
+            });
+        }
+        content.push({ type: 'text', text });
+        return content;
+    }
+
     // Push initial message
     let messages = new PushableAsyncIterable<SDKUserMessage>();
     messages.push({
         type: 'user',
         message: {
             role: 'user',
-            content: initial.message,
+            content: buildContent(initial.message, initial.images),
         },
     });
 
@@ -213,7 +234,7 @@ export async function claudeRemote(opts: {
                     return;
                 }
                 mode = next.mode;
-                messages.push({ type: 'user', message: { role: 'user', content: next.message } });
+                messages.push({ type: 'user', message: { role: 'user', content: buildContent(next.message, next.images) } });
             }
 
             // Handle tool result
