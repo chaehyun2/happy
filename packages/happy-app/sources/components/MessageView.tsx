@@ -95,8 +95,10 @@ function UserTextBlock(props: {
     }
   }, [claudeUuid, props.message.id, props.onForkFromUserMessage]);
 
-  // Get images from ephemeral store (keyed by localId)
-  const images = props.message.images || (props.message.localId ? messageImageStore.get(props.message.localId) : undefined);
+  // Get images from ephemeral store (keyed by localId or id)
+  const images = props.message.images
+    || (props.message.localId ? messageImageStore.get(props.message.localId) : undefined)
+    || messageImageStore.get(props.message.id);
   const [expandedImage, setExpandedImage] = React.useState<string | null>(null);
 
   return (
