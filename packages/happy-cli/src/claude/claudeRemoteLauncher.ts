@@ -280,6 +280,7 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
     try {
         let pending: {
             message: MessageParam['content'];
+            images?: import("@/utils/MessageQueue2").ImageAttachment[];
             mode: EnhancedMode;
         } | null = null;
 
@@ -384,6 +385,7 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
 
                             return {
                                 message: msg.message,
+                                images: msg.images,
                                 mode: msg.mode
                             }
                         }

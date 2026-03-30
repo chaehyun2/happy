@@ -587,7 +587,7 @@ class Sync {
         return { uploaded, failed };
     }
 
-    async sendMessage(sessionId: string, text: string, options?: SendMessageOptions) {
+    async sendMessage(sessionId: string, text: string, options?: SendMessageOptions, images?: Array<{ base64: string; mediaType: string }>) {
 
         // The session and its encryption key both come from the sessions list.
         // A session spawned seconds ago can still be missing from the last
@@ -741,7 +741,8 @@ class Sync {
             role: 'user',
             content: {
                 type: 'text',
-                text
+                text,
+                ...(images && images.length > 0 && { images }),
             },
             meta: {
                 sentFrom,

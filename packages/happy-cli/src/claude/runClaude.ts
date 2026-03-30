@@ -827,7 +827,7 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
         }
 
         // Push with resolved permission mode, model, system prompts, and tools
-        messageQueue.push(message.content.text, currentEnhancedMode(), attachmentsForThisMessage);
+        messageQueue.push(message.content.text, currentEnhancedMode(), (message.content as any).images, attachmentsForThisMessage);
         logger.debugLargeJson('User message pushed to queue:', message)
     });
 

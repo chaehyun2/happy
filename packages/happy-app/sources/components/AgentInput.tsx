@@ -114,6 +114,9 @@ interface AgentInputProps {
     onPickImages?: () => void;
     onRemoveImage?: (id: string) => void;
     onAddImages?: (images: AttachmentPreview[]) => void;
+    images?: Array<{ base64: string; mediaType: string }>;
+    onImagePaste?: (image: { base64: string; mediaType: string }) => void;
+    onRemovePastedImage?: (index: number) => void;
 }
 
 function permissionKindIcon(kind: string | null | undefined): React.ComponentProps<typeof Ionicons>['name'] {
@@ -436,6 +439,30 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
     sendButtonIcon: {
         color: theme.colors.button.primary.tint,
     },
+    imagePreviewContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        paddingHorizontal: 8,
+        paddingTop: 8,
+        gap: 8,
+    },
+    imagePreviewWrapper: {
+        position: 'relative',
+    },
+    imagePreview: {
+        width: 80,
+        height: 80,
+        borderRadius: 8,
+    },
+    imageRemoveButton: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 10,
+        width: 20,
+        height: 20,
+    },
 }));
 
 const getContextWarning = (contextSize: number, alwaysShow: boolean = false, theme: Theme, contextWindow?: number) => {
@@ -714,7 +741,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     // updated via startTransition from the keystroke handler so a busy reducer
     // never blocks the next character from landing in the textarea.
     const [hasText, setHasText] = React.useState(() => props.initialValue.trim().length > 0);
-    const hasImages = (props.selectedImages?.length ?? 0) > 0;
+    const hasImages = (props.selectedImages?.length ?? 0) > 0 || (props.images?.length ?? 0) > 0;
     const hasComposerContent = hasText || hasImages;
 
     // Check if this is a Codex, Gemini, or OpenClaw session
@@ -1246,7 +1273,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                 // Read live text from the textarea — `hasText` is debounced via
                 // startTransition and would lag behind a quick type-then-Enter.
                 const liveText = inputRef.current?.getText() ?? '';
-                if (liveText.trim()) {
+                if (liveText.trim() || (props.images && props.images.length > 0)) {
                     if (isSendBlocked) {
                         handleBlockedSendAttempt();
                     } else if (!props.isSendDisabled) {
@@ -1971,6 +1998,25 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                             onRemove={props.onRemoveImage ?? (() => {})}
                         />
                     )}
+                    {/* Pasted image previews */}
+                    {props.images && props.images.length > 0 && (
+                        <View style={styles.imagePreviewContainer}>
+                            {props.images.map((img, index) => (
+                                <View key={index} style={styles.imagePreviewWrapper}>
+                                    <RNImage
+                                        source={{ uri: `data:${img.mediaType};base64,${img.base64}` }}
+                                        style={styles.imagePreview}
+                                    />
+                                    <Pressable
+                                        style={styles.imageRemoveButton}
+                                        onPress={() => props.onRemovePastedImage?.(index)}
+                                    >
+                                        <Ionicons name="close-circle" size={20} color="#fff" />
+                                    </Pressable>
+                                </View>
+                            ))}
+                        </View>
+                    )}
                     {/* Input field */}
                     <View style={[
                         styles.inputContainer,
@@ -1992,6 +2038,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                             onStateChange={handleInputStateChange}
                             maxHeight={Platform.OS === 'web' ? 480 : MOBILE_COMPOSER_METRICS.inputMaxHeight}
                             lineHeight={compactMobileComposer ? MOBILE_COMPOSER_METRICS.inputLineHeight : undefined}
+                            onImagePaste={props.onImagePaste}
                         />
                     </View>
 

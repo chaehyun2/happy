@@ -654,6 +654,7 @@ export function SessionViewLoaded({
         }
     }, [usesFloatingMobileDock]);
 
+    const [images, setImages] = React.useState<Array<{ base64: string; mediaType: string }>>([]);
     const realtimeStatus = useRealtimeStatus();
     const { messages, isLoaded } = useSessionMessages(sessionId);
     const pendingCommunications = useSessionPendingCommunications(sessionId);
@@ -1021,6 +1022,9 @@ export function SessionViewLoaded({
             metadata={session.metadata}
             connectionStatus={connectionStatus}
             blockSend={isRig && session.thinking && session.metadata?.capabilities?.steering !== true}
+            images={images}
+            onImagePaste={(img) => setImages(prev => [...prev, img])}
+            onRemovePastedImage={(index) => setImages(prev => prev.filter((_, i) => i !== index))}
             onSend={handleSend}
             onMicPress={(embedded || isDisconnected) ? undefined : micButtonState.onMicPress}
             isMicActive={(embedded || isDisconnected) ? false : micButtonState.isMicActive}
