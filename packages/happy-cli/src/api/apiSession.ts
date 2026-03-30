@@ -250,9 +250,11 @@ export class ApiSessionClient extends EventEmitter {
 
     private routeIncomingMessage(message: unknown) {
         const msg = message as any;
+        logger.debug(`[routeIncomingMessage] role=${msg?.role}, content.type=${msg?.content?.type}, hasGroupId=${!!msg?.content?.groupId}, hasImageGroupId=${!!msg?.content?.imageGroupId}`);
 
         // Buffer ephemeral image messages (sent separately with TTL)
         if (msg?.role === 'user' && msg?.content?.type === 'images' && msg?.content?.groupId) {
+            logger.debug(`[routeIncomingMessage] Buffering image message, groupId=${msg.content.groupId}, imageCount=${msg.content.images?.length}`);
             this.imageBuffer.set(msg.content.groupId, msg.content.images);
             setTimeout(() => this.imageBuffer.delete(msg.content.groupId), 60000);
             return;
@@ -261,6 +263,7 @@ export class ApiSessionClient extends EventEmitter {
         // Attach buffered images to matching text message
         if (msg?.role === 'user' && msg?.content?.type === 'text' && msg?.content?.imageGroupId) {
             const images = this.imageBuffer.get(msg.content.imageGroupId);
+            logger.debug(`[routeIncomingMessage] Text with imageGroupId=${msg.content.imageGroupId}, foundImages=${!!images}, bufferSize=${this.imageBuffer.size}`);
             if (images) {
                 msg.content.images = images;
                 this.imageBuffer.delete(msg.content.imageGroupId);
