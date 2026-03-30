@@ -27,7 +27,8 @@ const getMessagesQuerySchema = z.object({
 const sendMessagesBodySchema = z.object({
     messages: z.array(z.object({
         content: z.string(),
-        localId: z.string().min(1)
+        localId: z.string().min(1),
+        expiresIn: z.number().int().min(1).optional()
     })).min(1).max(100)
 });
 
@@ -145,7 +146,7 @@ export function v3SessionRoutes(app: Fastify) {
             return reply.code(404).send({ error: 'Session not found' });
         }
 
-        const firstMessageByLocalId = new Map<string, { localId: string; content: string }>();
+        const firstMessageByLocalId = new Map<string, { localId: string; content: string; expiresIn?: number }>();
         for (const message of messages) {
             if (!firstMessageByLocalId.has(message.localId)) {
                 firstMessageByLocalId.set(message.localId, message);
@@ -191,7 +192,11 @@ export function v3SessionRoutes(app: Fastify) {
                             t: 'encrypted',
                             c: message.content
                         },
-                        localId: message.localId
+                        localId: message.localId,
+                        // Fork feature: per-message TTL (image messages expire server-side)
+                        expiresAt: message.expiresIn
+                            ? new Date(Date.now() + message.expiresIn * 1000)
+                            : undefined
                     })),
                     select: {
                         id: true,
