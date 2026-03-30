@@ -414,6 +414,7 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
     const isLandscape = useIsLandscape();
     const deviceType = useDeviceType();
     const isTablet = useIsTablet();
+    const [images, setImages] = React.useState<Array<{ base64: string; mediaType: string }>>([]);
     const realtimeStatus = useRealtimeStatus();
     const { messages, isLoaded } = useSessionMessages(sessionId);
     const acknowledgedCliVersions = useLocalSetting('acknowledgedCliVersions');
@@ -671,6 +672,9 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
             metadata={session.metadata}
             connectionStatus={connectionStatus}
             blockSend={false}
+            images={images}
+            onImagePaste={(img) => setImages(prev => [...prev, img])}
+            onRemovePastedImage={(index) => setImages(prev => prev.filter((_, i) => i !== index))}
             onSend={handleSend}
             onMicPress={isDisconnected ? undefined : micButtonState.onMicPress}
             isMicActive={isDisconnected ? false : micButtonState.isMicActive}

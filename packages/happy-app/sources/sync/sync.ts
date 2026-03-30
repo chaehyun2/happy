@@ -545,7 +545,7 @@ class Sync {
         return { uploaded, failed };
     }
 
-    async sendMessage(sessionId: string, text: string, options?: SendMessageOptions) {
+    async sendMessage(sessionId: string, text: string, options?: SendMessageOptions, images?: Array<{ base64: string; mediaType: string }>) {
 
         // Get encryption — may not be ready yet if sessions are still syncing
         let encryption = this.encryption.getSessionEncryption(sessionId);
@@ -677,7 +677,8 @@ class Sync {
             role: 'user',
             content: {
                 type: 'text',
-                text
+                text,
+                ...(images && images.length > 0 && { images }),
             },
             meta: {
                 sentFrom,
