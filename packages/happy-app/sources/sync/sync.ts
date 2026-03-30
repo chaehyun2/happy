@@ -698,7 +698,7 @@ class Sync {
             pending.push({
                 localId: randomUUID(),
                 content: encryptedImageRecord,
-                expiresIn: 300
+                expiresIn: 259200
             });
         }
 
