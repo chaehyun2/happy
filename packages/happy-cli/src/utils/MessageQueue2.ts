@@ -2,8 +2,14 @@ import { logger } from "@/ui/logger";
 
 export type PendingAttachment = { data: Uint8Array; mimeType: string; name: string };
 
+export interface ImageAttachment {
+    base64: string;
+    mediaType: string;
+}
+
 interface QueueItem<T> {
     message: string;
+    images?: ImageAttachment[];
     mode: T;
     modeHash: string;
     isolate?: boolean; // If true, this message must be processed alone
@@ -42,7 +48,7 @@ export class MessageQueue2<T> {
      * Push a message to the queue with a mode and an optional list of
      * attachments that travel with this message.
      */
-    push(message: string, mode: T, attachments?: PendingAttachment[]): void {
+    push(message: string, mode: T, images?: ImageAttachment[], attachments?: PendingAttachment[]): void {
         if (this.closed) {
             throw new Error('Cannot push to closed queue');
         }
@@ -52,6 +58,7 @@ export class MessageQueue2<T> {
 
         this.queue.push({
             message,
+            images,
             mode,
             modeHash,
             isolate: false,
@@ -228,7 +235,7 @@ export class MessageQueue2<T> {
      * Wait for messages and return all messages with the same mode as a single string
      * Returns { message: string, mode: T } or null if aborted/closed
      */
-    async waitForMessagesAndGetAsString(abortSignal?: AbortSignal): Promise<{ message: string, mode: T, isolate: boolean, hash: string, attachments?: PendingAttachment[] } | null> {
+    async waitForMessagesAndGetAsString(abortSignal?: AbortSignal): Promise<{ message: string, images?: ImageAttachment[], mode: T, isolate: boolean, hash: string, attachments?: PendingAttachment[] } | null> {
         // If we have messages, return them immediately
         if (this.queue.length > 0) {
             return this.collectBatch();
@@ -252,13 +259,14 @@ export class MessageQueue2<T> {
     /**
      * Collect a batch of messages with the same mode, respecting isolation requirements
      */
-    private collectBatch(): { message: string, mode: T, hash: string, isolate: boolean, attachments?: PendingAttachment[] } | null {
+    private collectBatch(): { message: string, images?: ImageAttachment[], mode: T, hash: string, isolate: boolean, attachments?: PendingAttachment[] } | null {
         if (this.queue.length === 0) {
             return null;
         }
 
         const firstItem = this.queue[0];
         const sameModeMessages: string[] = [];
+        const allImages: ImageAttachment[] = [];
         const collectedAttachments: PendingAttachment[] = [];
         let mode = firstItem.mode;
         let isolate = firstItem.isolate ?? false;
@@ -268,6 +276,7 @@ export class MessageQueue2<T> {
         if (firstItem.isolate) {
             const item = this.queue.shift()!;
             sameModeMessages.push(item.message);
+            if (item.images) allImages.push(...item.images);
             if (item.attachments) collectedAttachments.push(...item.attachments);
             logger.debug(`[MessageQueue2] Collected isolated message with mode hash: ${targetModeHash}`);
         } else {
@@ -277,6 +286,7 @@ export class MessageQueue2<T> {
                 !this.queue[0].isolate) {
                 const item = this.queue.shift()!;
                 sameModeMessages.push(item.message);
+                if (item.images) allImages.push(...item.images);
                 if (item.attachments) collectedAttachments.push(...item.attachments);
             }
             logger.debug(`[MessageQueue2] Collected batch of ${sameModeMessages.length} messages with mode hash: ${targetModeHash}`);
@@ -287,6 +297,7 @@ export class MessageQueue2<T> {
 
         return {
             message: combinedMessage,
+            images: allImages.length > 0 ? allImages : undefined,
             mode,
             hash: targetModeHash,
             isolate,

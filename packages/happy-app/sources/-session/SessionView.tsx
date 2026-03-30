@@ -305,6 +305,7 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
     const deviceType = useDeviceType();
     const isTablet = useIsTablet();
     const [message, setMessage] = React.useState('');
+    const [images, setImages] = React.useState<Array<{ base64: string; mediaType: string }>>([]);
     const realtimeStatus = useRealtimeStatus();
     const { messages, isLoaded } = useSessionMessages(sessionId);
     const acknowledgedCliVersions = useLocalSetting('acknowledgedCliVersions');
@@ -517,13 +518,18 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
                 isPulsing: sessionStatus.isPulsing
             }}
             blockSend={false}
+            images={images}
+            onImagePaste={(img) => setImages(prev => [...prev, img])}
+            onRemoveImage={(index) => setImages(prev => prev.filter((_, i) => i !== index))}
             onSend={() => {
-                if (message.trim() || (expImageUpload && selectedImages.length > 0)) {
+                if (message.trim() || (expImageUpload && selectedImages.length > 0) || images.length > 0) {
                     const attachments = expImageUpload ? selectedImages : undefined;
+                    const currentImages = images.length > 0 ? images : undefined;
                     setMessage('');
+                    setImages([]);
                     clearDraft();
                     if (expImageUpload) clearImages();
-                    sync.sendMessage(sessionId, message, { source: 'chat', attachments });
+                    sync.sendMessage(sessionId, message, { source: 'chat', attachments }, currentImages);
                 }
             }}
             onMicPress={isDisconnected ? undefined : micButtonState.onMicPress}

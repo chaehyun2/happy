@@ -630,7 +630,7 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
             disallowedTools: messageDisallowedTools,
             effort: messageEffort,
         };
-        messageQueue.push(message.content.text, enhancedMode, attachmentsForThisMessage);
+        messageQueue.push(message.content.text, enhancedMode, (message.content as any).images, attachmentsForThisMessage);
         logger.debugLargeJson('User message pushed to queue:', message)
     });
 
