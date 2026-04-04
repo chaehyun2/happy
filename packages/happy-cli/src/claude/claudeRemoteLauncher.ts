@@ -19,6 +19,7 @@ import { getAskUserQuestionToolCallIds } from "./utils/questionNotification";
 import { launchFailureMessage } from "./utils/launchFailureMessage";
 import { cleanupStdinAfterInk } from "@/utils/terminalStdinCleanup";
 import type { MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources';
+import { registerResumeSessionHandler } from "./registerResumeSessionHandler";
 
 interface PermissionsField {
     date: number;
@@ -99,6 +100,7 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
     // When to abort
     session.client.rpcHandlerManager.registerHandler('abort', doAbort); // When abort clicked
     session.client.rpcHandlerManager.registerHandler('switch', doSwitch); // When switch clicked
+    registerResumeSessionHandler(session.client.rpcHandlerManager, session, abort); // When resume clicked
     // Removed catch-all stdin handler - now handled by RemoteModeDisplay keyboard handlers
 
     // Create permission handler
@@ -309,9 +311,11 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
             abortFuture = new Future<void>();
             let modeHash: string | null = null;
             let mode: EnhancedMode | null = null;
+            const pendingResumeId = session.consumePendingResume();
             try {
                 const remoteResult = await claudeRemote({
                     sessionId: session.sessionId,
+                    resumeFromSessionId: pendingResumeId,
                     path: session.path,
                     allowedTools: session.allowedTools ?? [],
                     mcpServers: session.mcpServers,

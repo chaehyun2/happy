@@ -153,6 +153,8 @@ export function SessionActionsPopover({
         typeof navigator === 'undefined' ? undefined : navigator
     ), []);
 
+
+
     const position = React.useMemo(() => {
         if (!anchor) {
             return null;
