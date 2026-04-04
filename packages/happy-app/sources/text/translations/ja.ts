@@ -393,6 +393,7 @@ export const ja: TranslationStructure = {
         viewChanges: '変更を表示',
         viewChangesSubtitle: '未コミットのすべてのファイルの差分',
         resumeSession: 'Resume Session',
+        resumeInPlace: 'セッションを再起動',
         resumeSessionSubtitle: 'Resume this session on the same machine',
         resumeSessionSameMachineOnly: 'This session can only be resumed on the same machine it started on.',
         resumeSessionMachineOffline: 'This machine is offline. Resume is only available while it is online.',

@@ -390,6 +390,7 @@ export const it: TranslationStructure = {
         viewChanges: 'Vedi modifiche',
         viewChangesSubtitle: 'Differenze di tutti i file non committati',
         resumeSession: 'Resume Session',
+        resumeInPlace: 'Riavvia sessione',
         resumeSessionSubtitle: 'Resume this session on the same machine',
         resumeSessionSameMachineOnly: 'This session can only be resumed on the same machine it started on.',
         resumeSessionMachineOffline: 'This machine is offline. Resume is only available while it is online.',

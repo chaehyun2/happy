@@ -347,6 +347,7 @@ export const ru: TranslationStructure = {
         viewChanges: 'Изменения',
         viewChangesSubtitle: 'Диффы всех незакоммиченных файлов',
         resumeSession: 'Resume Session',
+        resumeInPlace: 'Перезапустить сессию',
         resumeSessionSubtitle: 'Resume this session on the same machine',
         resumeSessionSameMachineOnly: 'This session can only be resumed on the same machine it started on.',
         resumeSessionMachineOffline: 'This machine is offline. Resume is only available while it is online.',

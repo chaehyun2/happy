@@ -409,6 +409,7 @@ export const pl: TranslationStructure = {
         viewChanges: 'Zobacz zmiany',
         viewChangesSubtitle: 'Różnice we wszystkich niezatwierdzonych plikach',
         resumeSession: 'Resume Session',
+        resumeInPlace: 'Uruchom sesję ponownie',
         resumeSessionSubtitle: 'Resume this session on the same machine',
         resumeSessionSameMachineOnly: 'This session can only be resumed on the same machine it started on.',
         resumeSessionMachineOffline: 'This machine is offline. Resume is only available while it is online.',

@@ -393,6 +393,7 @@ export const zhHans: TranslationStructure = {
         viewChanges: '查看更改',
         viewChangesSubtitle: '所有未提交文件的差异',
         resumeSession: 'Resume Session',
+        resumeInPlace: '重启会话',
         resumeSessionSubtitle: 'Resume this session on the same machine',
         resumeSessionSameMachineOnly: 'This session can only be resumed on the same machine it started on.',
         resumeSessionMachineOffline: 'This machine is offline. Resume is only available while it is online.',

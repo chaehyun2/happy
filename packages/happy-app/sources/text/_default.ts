@@ -405,6 +405,7 @@ export const en = {
         viewMachineSubtitle: 'View machine details and sessions',
         viewChanges: 'View changes',
         viewChangesSubtitle: 'Diffs for every uncommitted file',
+        resumeInPlace: 'Restart Session',
         resumeSession: 'Resume Session',
         resumeSessionSubtitle: 'Resume this session on the same machine',
         resumeSessionSameMachineOnly: 'This session can only be resumed on the same machine it started on.',
