@@ -1891,15 +1891,6 @@ class Sync {
 
     private prefetchOlderMessagesInBackground = async (sessionId: string) => {
         const SLEEP_BETWEEN_PAGES_MS = 250;
-        // While loadOlderMessages handles the actual work, this loop is what
-        // keeps it going without user input. We keep stepping until either:
-        //   - the server says there is no more older history, or
-        //   - the session is no longer present in the store (user navigated
-        //     away and the session was unloaded), or
-        //   - we hit seq = 1 (the very first message), or
-        //   - the encryption key is gone (logged out).
-        // The loop yields between pages to keep the UI thread responsive
-        // and to spread out server load.
         while (true) {
             const sessionMessages = storage.getState().sessionMessages[sessionId];
             if (!sessionMessages || !sessionMessages.hasMoreOlder) {
@@ -1939,8 +1930,6 @@ class Sync {
 
         await this.applyFetchedMessages(sessionId, encryption, messages);
 
-        // Anchor both ends so future incremental forward sync resumes from
-        // maxSeq, and loadOlderMessages can page backward from minSeq.
         let maxSeq = 0;
         let minSeq = Number.POSITIVE_INFINITY;
         for (const message of messages) {
@@ -2008,13 +1997,6 @@ class Sync {
         }
     }
 
-    /**
-     * Fetch one page of older messages for a session and prepend them to the
-     * store. Called from the chat UI when the user scrolls past the top of
-     * the currently loaded history. No-op when we have already fetched the
-     * earliest message, when no initial fetch has happened yet, or when an
-     * older-fetch is already in flight for this session.
-     */
     loadOlderMessages = async (sessionId: string) => {
         const oldestSeq = this.sessionOldestSeq.get(sessionId);
         if (oldestSeq === undefined || oldestSeq <= 1) {
@@ -2034,8 +2016,6 @@ class Sync {
                     log.log(`💬 loadOlderMessages: encryption not ready for ${sessionId}`);
                     return;
                 }
-                // Re-read the cursor inside the lock. A concurrent
-                // socket-pushed update or reload could have changed it.
                 const beforeSeq = this.sessionOldestSeq.get(sessionId);
                 if (beforeSeq === undefined || beforeSeq <= 1) {
                     return;
