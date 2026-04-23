@@ -8,6 +8,7 @@ overrides:
   whatwg-url: 14.2.0
   parse-path: 7.0.3
   '@types/parse-path': 7.0.3
+  cli-cursor@4>restore-cursor: ^5.1.0
 
 importers:
 
@@ -8502,10 +8503,6 @@ packages:
     resolution: {integrity: sha512-6IzJLuGi4+R14vwagDHX+JrXmPVtPpn4mffDJ1UdR7/Edm87fl6yi8mMBIVvFtJaNTUvjughmW4hwLhRG7gC1Q==}
     engines: {node: '>=4'}
 
-  restore-cursor@4.0.0:
-    resolution: {integrity: sha512-I9fPXU9geO9bHOt9pHHOhOkYerIMsmVaWB0rA2AI9ERh/+x/i7MV5HKBNrg+ljO5eoPVgCcnFuRjJ9uH6I/3eg==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
-
   restore-cursor@5.1.0:
     resolution: {integrity: sha512-oMA2dcrw6u0YfxJQXm342bFKX/E4sG9rbTzO9ptUcR/e8A33cHuvStiYOwH7fszkZlZ1z/ta9AAoPk2F4qIOHA==}
     engines: {node: '>=18'}
@@ -13927,7 +13924,7 @@ snapshots:
 
   cli-cursor@4.0.0:
     dependencies:
-      restore-cursor: 4.0.0
+      restore-cursor: 5.1.0
 
   cli-cursor@5.0.0:
     dependencies:
@@ -18386,11 +18383,6 @@ snapshots:
   restore-cursor@2.0.0:
     dependencies:
       onetime: 2.0.1
-      signal-exit: 3.0.7
-
-  restore-cursor@4.0.0:
-    dependencies:
-      onetime: 5.1.2
       signal-exit: 3.0.7
 
   restore-cursor@5.1.0:
