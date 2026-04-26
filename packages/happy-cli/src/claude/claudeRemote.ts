@@ -1,7 +1,7 @@
 import { EnhancedMode } from "./loop";
 import { ImageAttachment } from "@/utils/MessageQueue2";
 import { query, type QueryOptions, type SDKMessage, type SDKSystemMessage, AbortError, SDKUserMessage } from '@/claude/sdk'
-import type { MessageParam } from '@anthropic-ai/sdk/resources'
+import type { MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources'
 import { mapToClaudeMode } from "./utils/permissionMode";
 import { claudeCheckSession } from "./utils/claudeCheckSession";
 import { join } from 'node:path';
@@ -153,13 +153,13 @@ export async function claudeRemote(opts: {
     };
 
     // Build SDK content: plain string when no images, content array when images are present
-    function buildContent(text: string, images?: ImageAttachment[]): string | Array<any> {
+    function buildContent(text: string, images?: ImageAttachment[]): string | ContentBlockParam[] {
         const validImages = images?.filter(img => img.base64);
         if (!validImages || validImages.length === 0) return text;
         logger.debug(`[claudeRemote] Building content with ${validImages.length} image(s)`);
-        const content: Array<{ type: string; [key: string]: unknown }> = validImages.map(img => ({
+        const content: ContentBlockParam[] = validImages.map(img => ({
             type: 'image' as const,
-            source: { type: 'base64' as const, media_type: img.mediaType || 'image/png', data: img.base64 },
+            source: { type: 'base64' as const, media_type: (img.mediaType || 'image/png') as 'image/png', data: img.base64 },
         }));
         if (text) {
             content.push({ type: 'text' as const, text });
