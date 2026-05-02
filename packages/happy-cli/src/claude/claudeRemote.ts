@@ -153,7 +153,7 @@ export async function claudeRemote(opts: {
     };
 
     // Build SDK content: plain string when no images, content array when images are present
-    function buildContent(text: string, images?: ImageAttachment[]): string | Array<{ type: string; [key: string]: unknown }> {
+    function buildContent(text: string, images?: ImageAttachment[]): string | Array<any> {
         const validImages = images?.filter(img => img.base64);
         if (!validImages || validImages.length === 0) return text;
         logger.debug(`[claudeRemote] Building content with ${validImages.length} image(s)`);
@@ -256,7 +256,7 @@ export async function claudeRemote(opts: {
                         messages.end();
                     } else {
                         mode = next.mode;
-                        messages.push({ type: 'user', parent_tool_use_id: null, message: { role: 'user', content: next.message } });
+                        messages.push({ type: 'user', parent_tool_use_id: null, message: { role: 'user', content: buildContent(next.message, next.images) } });
                     }
                 }).catch(() => {
                     messages.end();
