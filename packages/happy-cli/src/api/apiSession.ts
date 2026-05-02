@@ -366,21 +366,42 @@ export class ApiSessionClient extends EventEmitter {
     private routeIncomingMessage(message: unknown) {
         const msg = message as any;
 
-        // Buffer ephemeral image messages (sent separately with TTL)
+        // Buffer image chunk messages (sent separately to avoid size limits)
         if (msg?.role === 'user' && msg?.content?.type === 'images' && msg?.content?.groupId) {
-            this.imageBuffer.set(msg.content.groupId, msg.content.images);
+            const existing = this.imageBuffer.get(msg.content.groupId) || [];
+            existing.push(...msg.content.images);
+            this.imageBuffer.set(msg.content.groupId, existing);
             setTimeout(() => this.imageBuffer.delete(msg.content.groupId), 60000);
             return;
         }
 
         // Attach buffered images to matching text message
+        // If images haven't arrived yet, defer and retry briefly
         if (msg?.role === 'user' && msg?.content?.type === 'text' && msg?.content?.imageGroupId) {
-            const images = this.imageBuffer.get(msg.content.imageGroupId);
+            const groupId = msg.content.imageGroupId;
+            const images = this.imageBuffer.get(groupId);
             if (images) {
                 msg.content.images = images;
-                this.imageBuffer.delete(msg.content.imageGroupId);
+                this.imageBuffer.delete(groupId);
+                delete msg.content.imageGroupId;
+            } else {
+                // Images not yet arrived — retry after short delay
+                delete msg.content.imageGroupId;
+                let retries = 0;
+                const retry = setInterval(() => {
+                    const imgs = this.imageBuffer.get(groupId);
+                    retries++;
+                    if (imgs || retries >= 10) {
+                        clearInterval(retry);
+                        if (imgs) {
+                            msg.content.images = imgs;
+                            this.imageBuffer.delete(groupId);
+                        }
+                        this.routeIncomingMessage(msg);
+                    }
+                }, 200);
+                return;
             }
-            delete msg.content.imageGroupId;
         }
 
         const userResult = UserMessageSchema.safeParse(message);

@@ -682,24 +682,26 @@ class Sync {
             this.pendingOutbox.set(sessionId, pending);
         }
 
-        // Send images as separate ephemeral message with TTL (deleted from server after 5 min)
+        // Send images as separate message chunks with TTL (large images exceed single message size limit)
         const groupId = images && images.length > 0 ? randomUUID() : undefined;
         if (images && images.length > 0 && groupId) {
-            const imageContent: RawRecord = {
-                role: 'user',
-                content: {
-                    type: 'images',
-                    groupId,
-                    images,
-                },
-                meta: { sentFrom }
-            };
-            const encryptedImageRecord = await encryption.encryptRawRecord(imageContent);
-            pending.push({
-                localId: randomUUID(),
-                content: encryptedImageRecord,
-                expiresIn: 259200
-            });
+            for (const image of images) {
+                const imageContent: RawRecord = {
+                    role: 'user',
+                    content: {
+                        type: 'images',
+                        groupId,
+                        images: [image],
+                    },
+                    meta: { sentFrom }
+                };
+                const encryptedImageRecord = await encryption.encryptRawRecord(imageContent);
+                pending.push({
+                    localId: randomUUID(),
+                    content: encryptedImageRecord,
+                    expiresIn: 259200
+                });
+            }
         }
 
         // Create user message content with metadata
