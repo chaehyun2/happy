@@ -525,13 +525,15 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
     // need to re-create on every keystroke.
     const handleSend = React.useCallback(() => {
         const liveMessage = composerHandleRef.current?.getMessage() ?? '';
-        if (liveMessage.trim() || (expImageUpload && selectedImages.length > 0)) {
+        const pastedImages = images.length > 0 ? images : undefined;
+        if (liveMessage.trim() || (expImageUpload && selectedImages.length > 0) || pastedImages) {
             const attachments = expImageUpload ? selectedImages : undefined;
             composerHandleRef.current?.clearMessage();
+            setImages([]);
             if (expImageUpload) clearImages();
-            sync.sendMessage(sessionId, liveMessage, { source: 'chat', attachments });
+            sync.sendMessage(sessionId, liveMessage, { source: 'chat', attachments }, pastedImages);
         }
-    }, [sessionId, expImageUpload, selectedImages, clearImages]);
+    }, [sessionId, expImageUpload, selectedImages, images, clearImages]);
 
     const handleAbort = React.useCallback(() => {
         storage.getState().resetSessionAgentOverrides(sessionId);
