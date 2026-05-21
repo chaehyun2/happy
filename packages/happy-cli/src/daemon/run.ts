@@ -28,6 +28,7 @@ import { detectCLIAvailability } from '@/utils/detectCLI';
 import { buildResumeLaunch } from '@/resume/handleResumeCommand';
 import { detectResumeSupport } from '@/resume/localHappyAgentAuth';
 import { encodeBase64, decodeBase64, decrypt } from '@/api/encryption';
+import { deleteReconnectEnvFromProcess } from '@/utils/reconnectEnv';
 
 /** Shell-escape a string for safe interpolation into tmux commands. */
 function shellescape(s: string): string {
@@ -51,6 +52,11 @@ export const initialMachineMetadata: MachineMetadata = {
 };
 
 export async function startDaemon(): Promise<void> {
+  // Defense in depth: even if a parent process leaked HAPPY_RECONNECT_* into
+  // our env, never propagate it to spawned sessions. The resume RPC explicitly
+  // re-injects these for the one child that needs them.
+  deleteReconnectEnvFromProcess();
+
   // We don't have cleanup function at the time of server construction
   // Control flow is:
   // 1. Create promise that will resolve when shutdown is requested
