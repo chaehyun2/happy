@@ -158,16 +158,17 @@ export async function claudeRemote(opts: {
     };
 
     // Build SDK content: plain string when no images, content array when images are present
-    function buildContent(text: string, images?: ImageAttachment[]): string | ContentBlockParam[] {
+    function buildContent(text: MessageParam['content'], images?: ImageAttachment[]): MessageParam['content'] {
         const validImages = images?.filter(img => img.base64);
         if (!validImages || validImages.length === 0) return text;
+        const textStr = typeof text === 'string' ? text : '';
         logger.debug(`[claudeRemote] Building content with ${validImages.length} image(s)`);
         const content: ContentBlockParam[] = validImages.map(img => ({
             type: 'image' as const,
             source: { type: 'base64' as const, media_type: (img.mediaType || 'image/png') as 'image/png', data: img.base64 },
         }));
-        if (text) {
-            content.push({ type: 'text' as const, text });
+        if (textStr) {
+            content.push({ type: 'text' as const, text: textStr });
         }
         return content;
     }

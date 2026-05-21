@@ -604,6 +604,10 @@ export class ApiSessionClient extends EventEmitter {
 
         const userResult = UserMessageSchema.safeParse(message);
         if (userResult.success) {
+            // Re-attach images after Zod parsing (safeParse creates a new object)
+            if (msg?.content?.images && !userResult.data.content.images) {
+                userResult.data.content.images = msg.content.images;
+            }
             if (this.pendingMessageCallback) {
                 this.pendingMessageCallback(userResult.data);
             } else {
