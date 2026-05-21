@@ -800,10 +800,12 @@ export function SessionViewLoaded({
     // need to re-create on every keystroke.
     const handleSend = React.useCallback(() => {
         const liveMessage = composerHandleRef.current?.getMessage() ?? '';
-        if (liveMessage.trim() || (expImageUpload && selectedImages.length > 0)) {
+        const pastedImages = images.length > 0 ? images : undefined;
+        if (liveMessage.trim() || (expImageUpload && selectedImages.length > 0) || pastedImages) {
             const attachments = expImageUpload ? selectedImages : undefined;
             const communicationsToDismiss = [...pendingCommunications];
             composerHandleRef.current?.clearMessage();
+            setImages([]);
             if (expImageUpload) clearImages();
 
             void (async () => {
@@ -816,7 +818,7 @@ export function SessionViewLoaded({
                         source: 'chat',
                         attachments,
                         awaitDelivery: communicationsToDismiss.length > 0,
-                    });
+                    }, pastedImages);
                     const dismissals = await Promise.allSettled(communicationsToDismiss.map(communication => (
                         sessionCancelCommunication(sessionId, communication.id, communication.kind)
                     )));
@@ -830,7 +832,7 @@ export function SessionViewLoaded({
                 }
             })();
         }
-    }, [sessionId, expImageUpload, selectedImages, clearImages, pendingCommunications]);
+    }, [sessionId, expImageUpload, selectedImages, images, clearImages, pendingCommunications]);
 
     const handleAbort = React.useCallback(() => {
         // Mode picks live in synced metadata — clear them there, otherwise the
