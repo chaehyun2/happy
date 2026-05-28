@@ -33,7 +33,8 @@ COPY packages/happy-wire ./packages/happy-wire
 COPY packages/happy-server ./packages/happy-server
 
 RUN pnpm --filter @slopus/happy-wire build
-RUN pnpm --filter happy-server build
+# Skip happy-server-self-host build: produces standalone bun bundle for CLI distribution,
+# not needed for docker which runs `tsx ./sources/main.ts` directly from source.
 
 # Stage 3: runtime
 FROM node:20 AS runner
@@ -57,4 +58,4 @@ EXPOSE 3000
 
 # Command to run the application
 COPY --from=builder /repo/package.json /repo/pnpm-workspace.yaml /repo/
-CMD ["pnpm", "--filter", "happy-server", "start"]
+CMD ["pnpm", "--filter", "happy-server-self-host", "start"]
