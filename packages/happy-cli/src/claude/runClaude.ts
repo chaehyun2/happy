@@ -957,6 +957,7 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
             'happy': {
                 type: 'http' as const,
                 url: happyServer.url,
+                alwaysLoad: true,
             }
         },
         session,
