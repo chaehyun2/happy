@@ -6,6 +6,12 @@ import { Usage } from '../api/types';
  */
 export const PRICING = {
     // --- Claude 4 & Future Models ---
+    'claude-4.8-opus': {
+        input: 5.0,
+        output: 25.0,
+        cache_write: 6.25,
+        cache_read: 0.50
+    },
     'claude-4.5-opus': {
         input: 5.0,
         output: 25.0,
@@ -100,13 +106,15 @@ export function calculateCost(usage: Usage, modelId?: string): { total: number, 
     if (!pricing) {
         // Try fuzzy matching for common aliases
         if (modelId?.includes('opus')) {
-            if (modelId.includes('4.5')) pricing = PRICING['claude-4.5-opus'];
+            if (modelId.includes('4.8')) pricing = PRICING['claude-4.8-opus'];
+            else if (modelId.includes('4.5')) pricing = PRICING['claude-4.5-opus'];
             else if (modelId.includes('4.1')) pricing = PRICING['claude-4.1-opus'];
             else if (modelId.includes('4')) pricing = PRICING['claude-4-opus'];
             else pricing = PRICING['claude-3-opus-20240229'];
         }
         else if (modelId?.includes('sonnet')) {
-            if (modelId.includes('4.5')) pricing = PRICING['claude-4.5-sonnet'];
+            if (modelId.includes('4.6')) pricing = PRICING['claude-4.5-sonnet']; // 4.6 same pricing as 4.5
+            else if (modelId.includes('4.5')) pricing = PRICING['claude-4.5-sonnet'];
             else if (modelId.includes('4')) pricing = PRICING['claude-4-sonnet'];
             else pricing = PRICING['claude-3-5-sonnet-20241022'];
         }
