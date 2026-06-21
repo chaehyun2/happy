@@ -347,27 +347,27 @@ class Sync {
         }
 
         this.sessionQueueProcessing.add(sessionId);
-        const lock = this.getSessionMessageLock(sessionId);
-        void lock.inLock(async () => {
-            while (true) {
-                // Coalesce bursts: let tokens that arrive within one frame
-                // accumulate so we apply (and re-sort the whole message map)
-                // once per frame instead of once per token.
-                await new Promise<void>(resolve => setTimeout(resolve, MESSAGE_COALESCE_MS));
+        // Coalesce bursts OUTSIDE the per-session lock: let tokens that arrive
+        // within one frame accumulate, then apply them in a single batch. The
+        // wait must not hold the lock — fetchMessages/loadOlderMessages share it,
+        // and a continuous stream would otherwise starve gap recovery and
+        // scroll-up history loading for as long as the agent keeps talking.
+        setTimeout(() => {
+            const lock = this.getSessionMessageLock(sessionId);
+            void lock.inLock(() => {
                 const pending = this.sessionMessageQueue.get(sessionId);
-                if (!pending || pending.length === 0) {
-                    break;
+                if (pending && pending.length > 0) {
+                    const batch = pending.splice(0, pending.length);
+                    this.applyMessages(sessionId, batch);
                 }
-                const batch = pending.splice(0, pending.length);
-                this.applyMessages(sessionId, batch);
-            }
-        }).finally(() => {
-            this.sessionQueueProcessing.delete(sessionId);
-            const pending = this.sessionMessageQueue.get(sessionId);
-            if (pending && pending.length > 0) {
-                this.scheduleQueuedMessagesProcessing(sessionId);
-            }
-        });
+            }).finally(() => {
+                this.sessionQueueProcessing.delete(sessionId);
+                const pending = this.sessionMessageQueue.get(sessionId);
+                if (pending && pending.length > 0) {
+                    this.scheduleQueuedMessagesProcessing(sessionId);
+                }
+            });
+        }, MESSAGE_COALESCE_MS);
     }
 
     private hasPendingOutboxMessages() {
@@ -2770,20 +2770,38 @@ class Sync {
 export const sync = new Sync();
 
 // Ephemeral store for message images (keyed by message localId, used for UI rendering).
-// Base64 image data is large and is never re-fetched, so the store is capped and
-// evicts the oldest entries (Map preserves insertion order) to avoid an unbounded
-// memory leak that progressively degrades performance until the page is reloaded.
-const MAX_STORED_IMAGE_MESSAGES = 30;
+// Base64 image data is large and is never re-fetched, so the store is bounded by a
+// memory budget and evicts the oldest entries (Map preserves insertion order) to
+// avoid an unbounded leak that progressively degrades performance until reload.
+// The budget (not an entry count) is what actually matters: a single message can
+// carry several images, and a byte ceiling keeps memory bounded regardless of how
+// images are distributed across messages. ~64MB holds a generous scrollback of
+// recent image previews while preventing runaway growth.
+const MAX_STORED_IMAGE_BYTES = 64 * 1024 * 1024;
 export const messageImageStore = new Map<string, Array<{ base64: string; mediaType: string }>>();
+const messageImageBytes = new Map<string, number>();
+let totalStoredImageBytes = 0;
 
 export function storeMessageImages(key: string, images: Array<{ base64: string; mediaType: string }>) {
+    // Re-setting an existing key replaces its byte contribution.
+    const previousBytes = messageImageBytes.get(key);
+    if (previousBytes !== undefined) {
+        totalStoredImageBytes -= previousBytes;
+    }
+    const bytes = images.reduce((sum, img) => sum + img.base64.length, 0);
     messageImageStore.set(key, images);
-    while (messageImageStore.size > MAX_STORED_IMAGE_MESSAGES) {
+    messageImageBytes.set(key, bytes);
+    totalStoredImageBytes += bytes;
+    // Evict oldest entries until under budget. Never evict the entry we just
+    // added (it is the most recent and most likely to be on screen).
+    while (totalStoredImageBytes > MAX_STORED_IMAGE_BYTES && messageImageStore.size > 1) {
         const oldest = messageImageStore.keys().next().value;
-        if (oldest === undefined) {
+        if (oldest === undefined || oldest === key) {
             break;
         }
+        totalStoredImageBytes -= messageImageBytes.get(oldest) ?? 0;
         messageImageStore.delete(oldest);
+        messageImageBytes.delete(oldest);
     }
 }
 
