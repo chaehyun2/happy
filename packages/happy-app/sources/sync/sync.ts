@@ -92,6 +92,13 @@ type V3GetSessionMessagesResponse = {
 // within int4 while still being effectively "infinite" for any session.
 const SEQ_BACKWARD_INITIAL_SENTINEL = 2_147_483_647;
 
+// Coalescing window for applying incoming messages. Streaming agents emit many
+// tokens per second; applying each one individually re-sorts the entire message
+// map and re-renders the chat list per token, saturating the main thread and
+// making text input feel laggy. Batching arrivals within one ~frame collapses
+// those storms into a single update without any perceptible delay.
+const MESSAGE_COALESCE_MS = 24;
+
 type V3PostSessionMessagesResponse = {
     messages: Array<{
         id: string;
@@ -477,8 +484,12 @@ class Sync {
 
         this.sessionQueueProcessing.add(sessionId);
         const lock = this.getSessionMessageLock(sessionId);
-        void lock.inLock(() => {
+        void lock.inLock(async () => {
             while (true) {
+                // Coalesce bursts: let tokens that arrive within one frame
+                // accumulate so we apply (and re-sort the whole message map)
+                // once per frame instead of once per token.
+                await new Promise<void>(resolve => setTimeout(resolve, MESSAGE_COALESCE_MS));
                 const pending = this.sessionMessageQueue.get(sessionId);
                 if (!pending || pending.length === 0) {
                     break;
