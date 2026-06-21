@@ -81,6 +81,13 @@ type V3GetSessionMessagesResponse = {
 // within int4 while still being effectively "infinite" for any session.
 const SEQ_BACKWARD_INITIAL_SENTINEL = 2_147_483_647;
 
+// Coalescing window for applying incoming messages. Streaming agents emit many
+// tokens per second; applying each one individually re-sorts the entire message
+// map and re-renders the chat list per token, saturating the main thread and
+// making text input feel laggy. Batching arrivals within one ~frame collapses
+// those storms into a single update without any perceptible delay.
+const MESSAGE_COALESCE_MS = 24;
+
 type V3PostSessionMessagesResponse = {
     messages: Array<{
         id: string;
@@ -369,8 +376,12 @@ class Sync {
 
         this.sessionQueueProcessing.add(sessionId);
         const lock = this.getSessionMessageLock(sessionId);
-        void lock.inLock(() => {
+        void lock.inLock(async () => {
             while (true) {
+                // Coalesce bursts: let tokens that arrive within one frame
+                // accumulate so we apply (and re-sort the whole message map)
+                // once per frame instead of once per token.
+                await new Promise<void>(resolve => setTimeout(resolve, MESSAGE_COALESCE_MS));
                 const pending = this.sessionMessageQueue.get(sessionId);
                 if (!pending || pending.length === 0) {
                     break;
@@ -789,7 +800,7 @@ class Sync {
 
         // Store images for UI display (keyed by message localId)
         if (images && images.length > 0) {
-            messageImageStore.set(localId, images);
+            storeMessageImages(localId, images);
         }
 
         // Add to messages - normalize the raw record (show text message in UI)
@@ -2869,8 +2880,23 @@ class Sync {
 // Global singleton instance
 export const sync = new Sync();
 
-// Ephemeral store for message images (keyed by message localId, used for UI rendering)
+// Ephemeral store for message images (keyed by message localId, used for UI rendering).
+// Base64 image data is large and is never re-fetched, so the store is capped and
+// evicts the oldest entries (Map preserves insertion order) to avoid an unbounded
+// memory leak that progressively degrades performance until the page is reloaded.
+const MAX_STORED_IMAGE_MESSAGES = 30;
 export const messageImageStore = new Map<string, Array<{ base64: string; mediaType: string }>>();
+
+export function storeMessageImages(key: string, images: Array<{ base64: string; mediaType: string }>) {
+    messageImageStore.set(key, images);
+    while (messageImageStore.size > MAX_STORED_IMAGE_MESSAGES) {
+        const oldest = messageImageStore.keys().next().value;
+        if (oldest === undefined) {
+            break;
+        }
+        messageImageStore.delete(oldest);
+    }
+}
 
 //
 // Init sequence
