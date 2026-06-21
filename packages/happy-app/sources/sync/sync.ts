@@ -483,27 +483,27 @@ class Sync {
         }
 
         this.sessionQueueProcessing.add(sessionId);
-        const lock = this.getSessionMessageLock(sessionId);
-        void lock.inLock(async () => {
-            while (true) {
-                // Coalesce bursts: let tokens that arrive within one frame
-                // accumulate so we apply (and re-sort the whole message map)
-                // once per frame instead of once per token.
-                await new Promise<void>(resolve => setTimeout(resolve, MESSAGE_COALESCE_MS));
+        // Coalesce bursts OUTSIDE the per-session lock: let tokens that arrive
+        // within one frame accumulate, then apply them in a single batch. The
+        // wait must not hold the lock — fetchMessages/loadOlderMessages share it,
+        // and a continuous stream would otherwise starve gap recovery and
+        // scroll-up history loading for as long as the agent keeps talking.
+        setTimeout(() => {
+            const lock = this.getSessionMessageLock(sessionId);
+            void lock.inLock(() => {
                 const pending = this.sessionMessageQueue.get(sessionId);
-                if (!pending || pending.length === 0) {
-                    break;
+                if (pending && pending.length > 0) {
+                    const batch = pending.splice(0, pending.length);
+                    this.applyMessages(sessionId, batch);
                 }
-                const batch = pending.splice(0, pending.length);
-                this.applyMessages(sessionId, batch);
-            }
-        }).finally(() => {
-            this.sessionQueueProcessing.delete(sessionId);
-            const pending = this.sessionMessageQueue.get(sessionId);
-            if (pending && pending.length > 0) {
-                this.scheduleQueuedMessagesProcessing(sessionId);
-            }
-        });
+            }).finally(() => {
+                this.sessionQueueProcessing.delete(sessionId);
+                const pending = this.sessionMessageQueue.get(sessionId);
+                if (pending && pending.length > 0) {
+                    this.scheduleQueuedMessagesProcessing(sessionId);
+                }
+            });
+        }, MESSAGE_COALESCE_MS);
     }
 
     private hasPendingOutboxMessages() {
