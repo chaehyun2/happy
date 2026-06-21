@@ -88,6 +88,12 @@ const SEQ_BACKWARD_INITIAL_SENTINEL = 2_147_483_647;
 // those storms into a single update without any perceptible delay.
 const MESSAGE_COALESCE_MS = 24;
 
+// How many older-message pages (100 msgs each) to prefetch in the background
+// after a session's initial load. Keeps a small scroll-up buffer ready while
+// preventing the in-memory message list from growing to the full history,
+// which made long sessions progressively slower to re-enter and re-render.
+const BACKGROUND_PREFETCH_MAX_PAGES = 3;
+
 type V3PostSessionMessagesResponse = {
     messages: Array<{
         id: string;
@@ -1065,7 +1071,9 @@ class Sync {
                 continue;
             }
 
-            // Decrypt metadata using session-specific encryption
+            // Decrypt metadata using session-specific encryption.
+            // (decryptMetadata/decryptAgentState already cache by sessionId+version
+            // in EncryptionCache, so unchanged sessions are not re-decrypted.)
             let metadata = await sessionEncryption.decryptMetadata(session.metadataVersion, session.metadata);
 
             // Decrypt agent state using session-specific encryption
@@ -2018,7 +2026,15 @@ class Sync {
 
     private prefetchOlderMessagesInBackground = async (sessionId: string) => {
         const SLEEP_BETWEEN_PAGES_MS = 250;
-        while (true) {
+        // Bound the prefetch. Previously this walked back through the ENTIRE
+        // history, loading every page into memory. For a long session that grew
+        // the in-memory message list without limit, so re-entering or
+        // re-rendering it became progressively slower until a page reload reset
+        // it back to the latest page. We now prefetch only a small buffer beyond
+        // the latest page; the remaining history streams in on demand via
+        // loadOlderMessages() when the user actually scrolls up.
+        let pagesLoaded = 0;
+        while (pagesLoaded < BACKGROUND_PREFETCH_MAX_PAGES) {
             const sessionMessages = storage.getState().sessionMessages[sessionId];
             if (!sessionMessages || !sessionMessages.hasMoreOlder) {
                 return;
@@ -2037,6 +2053,7 @@ class Sync {
                 log.log(`💬 prefetchOlderMessagesInBackground: error for ${sessionId}, stopping: ${String(error)}`);
                 return;
             }
+            pagesLoaded++;
 
             await new Promise((resolve) => setTimeout(resolve, SLEEP_BETWEEN_PAGES_MS));
         }
