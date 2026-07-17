@@ -59,6 +59,40 @@ function appendDaemonSpawnModeArgs(args: string[], options: SpawnSessionOptions,
   }
 }
 
+/**
+ * Read the Claude Code OAuth access token from the on-disk credentials file
+ * (~/.claude/.credentials.json).
+ *
+ * Recent Claude Code versions store OAuth credentials in the macOS Keychain.
+ * The Happy daemon runs under launchd (PPID 1) in a security session where the
+ * login Keychain is locked, so a daemon-spawned Claude cannot read those
+ * credentials and reports "Not logged in · Please run /login". The credentials
+ * file, by contrast, is readable by any process of the same user, so injecting
+ * its token via CLAUDE_CODE_OAUTH_TOKEN lets daemon-spawned sessions
+ * authenticate off the file and bypass the Keychain entirely.
+ *
+ * Returns null when the file is missing/unreadable, has no OAuth token, or the
+ * token is already expired — in which case we defer to Claude's own credential
+ * resolution rather than handing it a stale token.
+ */
+async function readClaudeOAuthTokenFromCredentialsFile(): Promise<string | null> {
+    try {
+        const credentialsPath = join(os.homedir(), '.claude', '.credentials.json');
+        const raw = await fs.readFile(credentialsPath, 'utf8');
+        const parsed = JSON.parse(raw) as { claudeAiOauth?: { accessToken?: string; expiresAt?: number } };
+        const oauth = parsed.claudeAiOauth;
+        if (!oauth?.accessToken) {
+            return null;
+        }
+        if (typeof oauth.expiresAt === 'number' && oauth.expiresAt <= Date.now()) {
+            return null;
+        }
+        return oauth.accessToken;
+    } catch {
+        return null;
+    }
+}
+
 // Prepare initial metadata
 // Suffix host with `-dev` for the HAPPY_VARIANT=dev variant so the dev daemon
 // is visually distinct from the stable one in the machine list (they otherwise
@@ -348,6 +382,22 @@ export async function startDaemon(): Promise<void> {
             authEnv.CODEX_HOME = codexHomeDir.name;
           } else { // Assuming claude
             authEnv.CLAUDE_CODE_OAUTH_TOKEN = options.token;
+          }
+        } else if (
+          options.agent !== 'codex' &&
+          !process.env.ANTHROPIC_API_KEY &&
+          !process.env.CLAUDE_CODE_OAUTH_TOKEN
+        ) {
+          // No explicit token and no auth already in the daemon environment.
+          // Fall back to the on-disk Claude credentials file so that
+          // daemon-spawned sessions do not depend on the macOS Keychain, which
+          // is locked in the daemon's launchd security session (PPID 1) and
+          // makes a spawned Claude report "Not logged in · Please run /login".
+          // See readClaudeOAuthTokenFromCredentialsFile below.
+          const fileToken = await readClaudeOAuthTokenFromCredentialsFile();
+          if (fileToken) {
+            authEnv.CLAUDE_CODE_OAUTH_TOKEN = fileToken;
+            logger.debug('[DAEMON RUN] Injected CLAUDE_CODE_OAUTH_TOKEN from ~/.claude/.credentials.json (Keychain bypass)');
           }
         }
 
