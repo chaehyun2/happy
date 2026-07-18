@@ -60,34 +60,35 @@ function appendDaemonSpawnModeArgs(args: string[], options: SpawnSessionOptions,
 }
 
 /**
- * Read the Claude Code OAuth access token from the on-disk credentials file
- * (~/.claude/.credentials.json).
+ * Read the Claude Code OAuth credentials (access + refresh token) from the
+ * on-disk credentials file (~/.claude/.credentials.json).
  *
  * Recent Claude Code versions store OAuth credentials in the macOS Keychain.
  * The Happy daemon runs under launchd (PPID 1) in a security session where the
  * login Keychain is locked, so a daemon-spawned Claude cannot read those
  * credentials and reports "Not logged in · Please run /login". The credentials
  * file, by contrast, is readable by any process of the same user, so injecting
- * its token via CLAUDE_CODE_OAUTH_TOKEN lets daemon-spawned sessions
- * authenticate off the file and bypass the Keychain entirely.
+ * its tokens via CLAUDE_CODE_OAUTH_TOKEN / CLAUDE_CODE_OAUTH_REFRESH_TOKEN lets
+ * daemon-spawned sessions authenticate off the file and bypass the Keychain.
  *
- * Returns null when the file is missing/unreadable, has no OAuth token, or the
- * token is already expired — in which case we defer to Claude's own credential
- * resolution rather than handing it a stale token.
+ * The refresh token is injected alongside the access token so the spawned
+ * session can renew its access token in-memory. Without it, a long-running
+ * session keeps a static access token and fails with "OAuth access token has
+ * been revoked" as soon as another process rotates the file token.
+ *
+ * Returns null when the file is missing/unreadable or has no OAuth access
+ * token.
  */
-async function readClaudeOAuthTokenFromCredentialsFile(): Promise<string | null> {
+async function readClaudeOAuthFromCredentialsFile(): Promise<{ accessToken: string; refreshToken?: string } | null> {
     try {
         const credentialsPath = join(os.homedir(), '.claude', '.credentials.json');
         const raw = await fs.readFile(credentialsPath, 'utf8');
-        const parsed = JSON.parse(raw) as { claudeAiOauth?: { accessToken?: string; expiresAt?: number } };
+        const parsed = JSON.parse(raw) as { claudeAiOauth?: { accessToken?: string; refreshToken?: string } };
         const oauth = parsed.claudeAiOauth;
         if (!oauth?.accessToken) {
             return null;
         }
-        if (typeof oauth.expiresAt === 'number' && oauth.expiresAt <= Date.now()) {
-            return null;
-        }
-        return oauth.accessToken;
+        return { accessToken: oauth.accessToken, refreshToken: oauth.refreshToken };
     } catch {
         return null;
     }
@@ -393,11 +394,20 @@ export async function startDaemon(): Promise<void> {
           // daemon-spawned sessions do not depend on the macOS Keychain, which
           // is locked in the daemon's launchd security session (PPID 1) and
           // makes a spawned Claude report "Not logged in · Please run /login".
-          // See readClaudeOAuthTokenFromCredentialsFile below.
-          const fileToken = await readClaudeOAuthTokenFromCredentialsFile();
-          if (fileToken) {
-            authEnv.CLAUDE_CODE_OAUTH_TOKEN = fileToken;
-            logger.debug('[DAEMON RUN] Injected CLAUDE_CODE_OAUTH_TOKEN from ~/.claude/.credentials.json (Keychain bypass)');
+          // See readClaudeOAuthFromCredentialsFile below.
+          const fileOauth = await readClaudeOAuthFromCredentialsFile();
+          if (fileOauth) {
+            authEnv.CLAUDE_CODE_OAUTH_TOKEN = fileOauth.accessToken;
+            if (fileOauth.refreshToken) {
+              // Provide the refresh token + refresh flag so the spawned session
+              // renews its access token in-memory instead of failing with
+              // "OAuth access token has been revoked" once the file token
+              // rotates. CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH keeps the refresh
+              // in-memory (no write-back), so concurrent sessions don't race.
+              authEnv.CLAUDE_CODE_OAUTH_REFRESH_TOKEN = fileOauth.refreshToken;
+              authEnv.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH = '1';
+            }
+            logger.debug('[DAEMON RUN] Injected Claude OAuth token (+refresh) from ~/.claude/.credentials.json (Keychain bypass)');
           }
         }
 
