@@ -1,6 +1,6 @@
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import * as React from 'react';
-import { Keyboard, View, Platform, useWindowDimensions, Text, ActivityIndicator, Pressable, TouchableWithoutFeedback } from 'react-native';
+import { Keyboard, View, Platform, useWindowDimensions, Text, ActivityIndicator, Pressable, TouchableWithoutFeedback, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import { AgentInputAttachmentStrip } from './AgentInputAttachmentStrip';
 import type { AttachmentPreview } from '@/sync/attachmentTypes';
