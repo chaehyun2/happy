@@ -425,7 +425,9 @@ export async function startDaemon(): Promise<void> {
             authEnv.CLAUDE_CODE_OAUTH_TOKEN = options.token;
           }
         } else if (
-          options.agent !== 'codex' &&
+          // Claude only — an omitted agent defaults to Claude. Other agents
+          // (codex, gemini, openclaw, agy) must never inherit Claude credentials.
+          (options.agent === undefined || options.agent === 'claude') &&
           !process.env.ANTHROPIC_API_KEY &&
           !process.env.CLAUDE_CODE_OAUTH_TOKEN
         ) {
