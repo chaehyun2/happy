@@ -36,6 +36,36 @@ export function mapToClaudeMode(mode: PermissionMode | undefined): ClaudeSdkPerm
     return codexToClaudeMap[mode] ?? (mode as ClaudeSdkPermissionMode);
 }
 
+/**
+ * True when a mode means "let the harness decide" rather than naming a concrete
+ * mode. Both spellings occur on the wire: newer app builds omit the field, older
+ * ones send the literal string 'default'.
+ */
+export function inheritsHarnessPermissionMode(
+    mode: PermissionMode | undefined,
+): mode is undefined | 'default' {
+    return mode === undefined || mode === 'default';
+}
+
+/**
+ * Map a mode for the SDK query boundary, where "Default" must arrive as
+ * undefined so Claude applies its own configuration (`permissions.defaultMode`
+ * and the allow rules in the user's settings files).
+ *
+ * App builds predating "let Default mean the harness default" send the literal
+ * string 'default' instead of omitting the field. That pins the session to
+ * Claude's `default` mode and shadows the user's settings, so collapse it back
+ * to undefined and make both wire formats mean the same thing.
+ */
+export function mapToClaudeSdkPermissionMode(
+    mode: PermissionMode | undefined,
+): ClaudeSdkPermissionMode | undefined {
+    if (inheritsHarnessPermissionMode(mode)) {
+        return undefined;
+    }
+    return mapToClaudeMode(mode);
+}
+
 const VALID_PERMISSION_MODES: readonly PermissionMode[] = [
     'auto',
     'default',

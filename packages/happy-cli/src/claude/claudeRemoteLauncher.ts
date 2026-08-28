@@ -282,6 +282,9 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
             message: MessageParam['content'];
             images?: import("@/utils/MessageQueue2").ImageAttachment[];
             mode: EnhancedMode;
+            // Carried so the replayed batch can seed the restart detector with
+            // the mode the next query is actually built for.
+            hash: string;
         } | null = null;
 
         // Track session ID to detect when it actually changes
@@ -330,6 +333,12 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
                         if (pending) {
                             let p = pending;
                             pending = null;
+                            // Record what this query is actually being built for.
+                            // Without it the restart detector below stays blind
+                            // (modeHash null) and the next mode change silently
+                            // runs inside a query built for the previous mode.
+                            modeHash = p.hash;
+                            mode = p.mode;
                             permissionHandler.handleModeChange(p.mode.permissionMode);
                             return p;
                         }

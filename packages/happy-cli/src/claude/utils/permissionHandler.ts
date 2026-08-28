@@ -10,7 +10,7 @@ import type { CanCallToolOptions, PermissionResult } from "../sdk/types";
 import { Session } from "../session";
 import { EnhancedMode, PermissionMode } from "../loop";
 import { getToolDescriptor } from "./getToolDescriptor";
-import { isClaudeBypassEquivalent, mapToClaudeMode } from "./permissionMode";
+import { inheritsHarnessPermissionMode, isClaudeBypassEquivalent, mapToClaudeMode } from "./permissionMode";
 
 export interface PermissionResponse {
     id: string;
@@ -70,9 +70,12 @@ export class PermissionHandler {
         // live query so the SDK stops consulting canUseTool on its own.
         //
         // Only a concrete mode is pushed: setPermissionMode has no way to say
-        // "go back to inheriting", so switching to Default leaves the running
-        // query where it is and takes effect on the next one.
-        if (mode !== undefined
+        // "go back to inheriting", and pushing a literal 'default' would pin the
+        // query to Claude's default mode and shadow the user's settings — the
+        // very thing the SDK boundary normalizes away. Switching to Default
+        // instead restarts the query (the queue hash tracks it), which rebuilds
+        // the options with an unset mode.
+        if (!inheritsHarnessPermissionMode(mode)
             && this.setPermissionModeCallback
             && mapToClaudeMode(previousMode) !== mapToClaudeMode(mode)) {
             this.setPermissionModeCallback(mapToClaudeMode(mode)).catch((err) => {

@@ -1,6 +1,49 @@
 import { describe, it, expect } from 'vitest';
-import { applySandboxPermissionPolicy, extractPermissionModeFromClaudeArgs, mapToClaudeMode, resolveInitialClaudePermissionMode, resolveRemoteClaudePermissionMode } from './permissionMode';
+import { applySandboxPermissionPolicy, extractPermissionModeFromClaudeArgs, inheritsHarnessPermissionMode, mapToClaudeMode, mapToClaudeSdkPermissionMode, resolveInitialClaudePermissionMode, resolveRemoteClaudePermissionMode } from './permissionMode';
 import type { PermissionMode } from '@/api/types';
+
+describe('inheritsHarnessPermissionMode', () => {
+    it('treats both wire spellings of Default as inherit', () => {
+        expect(inheritsHarnessPermissionMode(undefined)).toBe(true);
+        expect(inheritsHarnessPermissionMode('default')).toBe(true);
+    });
+
+    it('treats every concrete mode as not inherit', () => {
+        const concrete: PermissionMode[] = ['auto', 'acceptEdits', 'bypassPermissions', 'plan', 'read-only', 'safe-yolo', 'yolo'];
+        for (const mode of concrete) {
+            expect(inheritsHarnessPermissionMode(mode)).toBe(false);
+        }
+    });
+});
+
+describe('mapToClaudeSdkPermissionMode', () => {
+    it('collapses a literal default to undefined so Claude applies its own settings', () => {
+        expect(mapToClaudeSdkPermissionMode('default')).toBeUndefined();
+    });
+
+    it('keeps undefined as undefined', () => {
+        expect(mapToClaudeSdkPermissionMode(undefined)).toBeUndefined();
+    });
+
+    it('maps Codex modes that are not default the same way as mapToClaudeMode', () => {
+        expect(mapToClaudeSdkPermissionMode('yolo')).toBe('bypassPermissions');
+    });
+
+    // Only a literal 'default' means "use the harness default". safe-yolo and
+    // read-only mean "ask", so they must stay pinned to Claude's default mode —
+    // collapsing them would silently inherit a bypassing settings default.
+    it('keeps Codex ask-modes pinned to default rather than inheriting settings', () => {
+        expect(mapToClaudeSdkPermissionMode('safe-yolo')).toBe('default');
+        expect(mapToClaudeSdkPermissionMode('read-only')).toBe('default');
+    });
+
+    it('passes every other Claude mode through unchanged', () => {
+        expect(mapToClaudeSdkPermissionMode('auto')).toBe('auto');
+        expect(mapToClaudeSdkPermissionMode('acceptEdits')).toBe('acceptEdits');
+        expect(mapToClaudeSdkPermissionMode('bypassPermissions')).toBe('bypassPermissions');
+        expect(mapToClaudeSdkPermissionMode('plan')).toBe('plan');
+    });
+});
 
 describe('mapToClaudeMode', () => {
     describe('Codex modes are mapped to Claude equivalents', () => {

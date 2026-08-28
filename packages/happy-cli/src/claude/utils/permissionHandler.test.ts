@@ -96,6 +96,37 @@ describe('PermissionHandler', () => {
         expect(setMode).toHaveBeenCalledWith('bypassPermissions');
     });
 
+    it('does not pin the live query to default when switching back to Default', async () => {
+        const { session } = createSessionMock();
+        const handler = new PermissionHandler(session as any);
+        const setMode = vi.fn(async () => {});
+
+        handler.setPermissionModeUpdater(setMode);
+        handler.handleModeChange('acceptEdits');
+        setMode.mockClear();
+
+        // Older app builds spell Default as the literal string rather than
+        // omitting it. Pushing it would shadow the user's settings, so the
+        // query is left alone and rebuilt on the next one instead.
+        handler.handleModeChange('default');
+
+        expect(setMode).not.toHaveBeenCalled();
+    });
+
+    it('does not push anything when Default arrives as an omitted mode', async () => {
+        const { session } = createSessionMock();
+        const handler = new PermissionHandler(session as any);
+        const setMode = vi.fn(async () => {});
+
+        handler.setPermissionModeUpdater(setMode);
+        handler.handleModeChange('acceptEdits');
+        setMode.mockClear();
+
+        handler.handleModeChange(undefined);
+
+        expect(setMode).not.toHaveBeenCalled();
+    });
+
     it('keeps main-thread request IDs unchanged', async () => {
         const { session, getState, handlers } = createSessionMock();
         const handler = new PermissionHandler(session as any);
