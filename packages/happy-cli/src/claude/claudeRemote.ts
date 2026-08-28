@@ -1,7 +1,7 @@
 import { EnhancedMode } from "./loop";
 import { query, type CanCallToolOptions, type QueryOptions, type SDKMessage, type SDKSystemMessage, AbortError, SDKUserMessage } from '@/claude/sdk'
 import type { MessageParam } from '@anthropic-ai/sdk/resources'
-import { mapToClaudeMode } from "./utils/permissionMode";
+import { mapToClaudeSdkPermissionMode } from "./utils/permissionMode";
 import { claudeCheckSession } from "./utils/claudeCheckSession";
 import { join } from 'node:path';
 import { parseSpecialCommand } from "@/parsers/specialCommands";
@@ -134,7 +134,7 @@ export async function claudeRemote(opts: {
         resume: startFrom ?? undefined,
         mcpServers: opts.mcpServers,
         plugins: pluginsFromArgs(opts.claudeArgs, opts.path),
-        permissionMode: mapToClaudeMode(initial.mode.permissionMode),
+        permissionMode: mapToClaudeSdkPermissionMode(initial.mode.permissionMode),
         model: initial.mode.model,
         fallbackModel: initial.mode.fallbackModel,
         customSystemPrompt: initial.mode.customSystemPrompt ? initial.mode.customSystemPrompt + '\n\n' + systemPrompt : undefined,
