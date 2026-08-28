@@ -32,7 +32,7 @@ import {
     type ClaudeGoalStatusTranscriptEvent,
 } from '@/claude/claudeGoalStatus';
 import { Session } from './session';
-import { applySandboxPermissionPolicy, resolveInitialClaudePermissionMode, resolveRemoteClaudePermissionMode } from './utils/permissionMode';
+import { applySandboxPermissionPolicy, inheritsHarnessPermissionMode, resolveInitialClaudePermissionMode, resolveRemoteClaudePermissionMode } from './utils/permissionMode';
 import { decodeBase64, encodeBase64 } from '@/api/encryption';
 import type { Session as ApiSession } from '@/api/types';
 import { getProjectPath } from './utils/path';
@@ -519,6 +519,11 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
     // Import MessageQueue2 and create message queue
     const messageQueue = new MessageQueue2<EnhancedMode>(mode => hashObject({
         isPlan: mode.permissionMode === 'plan',
+        // Switching to/from Default changes whether the SDK is given a concrete
+        // mode or left to inherit the harness settings, and setPermissionMode
+        // cannot express "inherit". Tracking it here restarts the query so the
+        // options are rebuilt with the right shape.
+        inheritsHarnessMode: inheritsHarnessPermissionMode(mode.permissionMode),
         model: mode.model,
         fallbackModel: mode.fallbackModel,
         customSystemPrompt: mode.customSystemPrompt,
