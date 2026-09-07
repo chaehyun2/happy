@@ -10,6 +10,13 @@ import { ensureLocalProxyBypass } from '../utils/proxyBypass'
 import { resolveHappyEntrypoint } from './happyEntrypoint'
 
 /**
+ * `resolvePermissionModeInCli` is implemented by the agent SDK but absent from its
+ * published types, so it has to be declared here. Re-check it on every SDK bump: if
+ * it disappears, sessions silently fall back to a pinned `--permission-mode default`.
+ */
+type OptionsWithCliPermissionResolution = Options & { resolvePermissionModeInCli?: boolean };
+
+/**
  * Wraps the official SDK query() with our QueryOptions adapter
  */
 export function query(params: { prompt: QueryPrompt; options?: QueryOptions }): Query {
@@ -28,7 +35,7 @@ export function query(params: { prompt: QueryPrompt; options?: QueryOptions }): 
     }
 
     // Map QueryOptions -> official Options
-    const sdkOptions: Options = {
+    const sdkOptions: OptionsWithCliPermissionResolution = {
         cwd: opts?.cwd,
         resume: opts?.resume,
         continue: opts?.continue,
@@ -44,6 +51,14 @@ export function query(params: { prompt: QueryPrompt; options?: QueryOptions }): 
         strictMcpConfig: opts?.strictMcpConfig,
         sessionId: undefined,
         effort: opts?.effort,
+        // An unset permissionMode does NOT reach the CLI as unset: the SDK
+        // substitutes "default" (`PP = c8 ?? (resolvePermissionModeInCli ? undefined
+        // : "default")`) and spawns the child with `--permission-mode default`. A CLI
+        // flag outranks settings files, so the user's `permissions.defaultMode` and
+        // allow rules end up shadowed. Opting in keeps the mode unset so the CLI
+        // resolves it from the user's own configuration, which is what "Default"
+        // is supposed to mean.
+        resolvePermissionModeInCli: true,
     }
 
     // Map abort signal -> AbortController
