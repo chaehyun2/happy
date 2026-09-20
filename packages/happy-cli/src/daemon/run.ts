@@ -22,6 +22,7 @@ import { startDaemonControlServer } from './controlServer';
 import { statSync } from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { claudeLockedKeychainAuthEnv } from './claudeKeychainAuth';
 import { join } from 'path';
 import { projectPath } from '@/projectPath';
 import { getTmuxUtilities, isTmuxAvailable, parseTmuxSessionIdentifier, formatTmuxSessionIdentifier } from '@/utils/tmux';
@@ -43,79 +44,6 @@ import { hasPersistedProcessConflict, isPidAlive, machineBootTimeMs } from './se
 /** Shell-escape a string for safe interpolation into tmux commands. */
 function shellescape(s: string): string {
     return "'" + s.replace(/'/g, "'\\''") + "'";
-}
-
-const execFileAsync = promisify(execFile);
-
-/** Keychain service name Claude Code uses for its OAuth credentials on macOS. */
-const CLAUDE_KEYCHAIN_SERVICE = 'Claude Code-credentials';
-
-/**
- * Whether Claude Code's OAuth credentials live in a macOS Keychain item that
- * this process can read.
- *
- * - `readable`: the item exists and is readable here — Claude manages its own
- *   tokens, nothing to inject.
- * - `locked`: the item exists but the Keychain is locked in this security
- *   session (`errSecInteractionNotAllowed`, exit 36) — a spawned Claude would
- *   report "Not logged in", so the credentials file has to be injected.
- * - `absent`: no such item (exit 44) or not macOS — Claude reads
- *   ~/.claude/.credentials.json directly, nothing to inject.
- */
-async function probeClaudeKeychainCredentials(): Promise<'readable' | 'locked' | 'absent'> {
-    if (process.platform !== 'darwin') {
-        return 'absent';
-    }
-    try {
-        await execFileAsync('security', ['find-generic-password', '-s', CLAUDE_KEYCHAIN_SERVICE, '-w']);
-        return 'readable';
-    } catch (error) {
-        // 36 = errSecInteractionNotAllowed (Keychain locked for this session),
-        // 44 = item not found. Anything else is treated as "no Keychain creds".
-        return (error as { code?: number }).code === 36 ? 'locked' : 'absent';
-    }
-}
-
-/**
- * Read the Claude Code OAuth credentials (access + refresh token) from the
- * on-disk credentials file (~/.claude/.credentials.json).
- *
- * Recent Claude Code versions store OAuth credentials in the macOS Keychain.
- * The Happy daemon runs under launchd (PPID 1) in a security session where the
- * login Keychain is locked, so a daemon-spawned Claude cannot read those
- * credentials and reports "Not logged in · Please run /login". The credentials
- * file, by contrast, is readable by any process of the same user, so injecting
- * its tokens via CLAUDE_CODE_OAUTH_TOKEN / CLAUDE_CODE_OAUTH_REFRESH_TOKEN lets
- * daemon-spawned sessions authenticate off the file and bypass the Keychain.
- *
- * The refresh token is injected alongside the access token so the spawned
- * session can renew its access token in-memory. Without it, a long-running
- * session keeps a static access token and fails with "OAuth access token has
- * been revoked" as soon as another process rotates the file token.
- *
- * This is a last resort: injected tokens are a snapshot. The auth server
- * rotates the refresh token on use, so a session holding an injected refresh
- * token loses the race as soon as any other Claude process refreshes, and then
- * fails with "401 OAuth access token has expired". Only inject when the
- * spawned Claude genuinely cannot reach the credentials itself (Keychain
- * locked) — see probeClaudeKeychainCredentials above.
- *
- * Returns null when the file is missing/unreadable or has no OAuth access
- * token.
- */
-async function readClaudeOAuthFromCredentialsFile(): Promise<{ accessToken: string; refreshToken?: string } | null> {
-    try {
-        const credentialsPath = join(os.homedir(), '.claude', '.credentials.json');
-        const raw = await fs.readFile(credentialsPath, 'utf8');
-        const parsed = JSON.parse(raw) as { claudeAiOauth?: { accessToken?: string; refreshToken?: string } };
-        const oauth = parsed.claudeAiOauth;
-        if (!oauth?.accessToken) {
-            return null;
-        }
-        return { accessToken: oauth.accessToken, refreshToken: oauth.refreshToken };
-    } catch {
-        return null;
-    }
 }
 
 // Prepare initial metadata
@@ -420,39 +348,8 @@ export async function startDaemon(): Promise<void> {
           } else { // Assuming claude
             authEnv.CLAUDE_CODE_OAUTH_TOKEN = options.token;
           }
-        } else if (
-          // Claude only — an omitted agent defaults to Claude. Other agents
-          // (codex, gemini, openclaw, agy) must never inherit Claude credentials.
-          (options.agent === undefined || options.agent === 'claude') &&
-          !process.env.ANTHROPIC_API_KEY &&
-          !process.env.CLAUDE_CODE_OAUTH_TOKEN
-        ) {
-          // No explicit token and no auth already in the daemon environment.
-          // Only fall back to the on-disk credentials file when the spawned
-          // Claude could not authenticate on its own, i.e. its credentials sit
-          // in a Keychain that is locked in the daemon's security session
-          // (PPID 1) — otherwise it reports "Not logged in · Please run
-          // /login". When the Keychain item is readable or absent (credentials
-          // in ~/.claude/.credentials.json), Claude reads and refreshes the
-          // tokens itself; injecting a snapshot would only pin it to a refresh
-          // token that the next rotation invalidates.
-          const keychainState = await probeClaudeKeychainCredentials();
-          const fileOauth = keychainState === 'locked' ? await readClaudeOAuthFromCredentialsFile() : null;
-          if (fileOauth) {
-            authEnv.CLAUDE_CODE_OAUTH_TOKEN = fileOauth.accessToken;
-            if (fileOauth.refreshToken) {
-              // Provide the refresh token + refresh flag so the spawned session
-              // renews its access token in-memory instead of failing with
-              // "OAuth access token has been revoked" once the file token
-              // rotates. CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH keeps the refresh
-              // in-memory (no write-back), so concurrent sessions don't race.
-              authEnv.CLAUDE_CODE_OAUTH_REFRESH_TOKEN = fileOauth.refreshToken;
-              authEnv.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH = '1';
-            }
-            logger.debug('[DAEMON RUN] Injected Claude OAuth token (+refresh) from ~/.claude/.credentials.json (Keychain locked)');
-          } else {
-            logger.debug(`[DAEMON RUN] Leaving Claude auth to the session itself (keychain: ${keychainState})`);
-          }
+        } else {
+          Object.assign(authEnv, await claudeLockedKeychainAuthEnv(options.agent));
         }
 
         let extraEnv: Record<string, string> = {
@@ -947,6 +844,12 @@ export async function startDaemon(): Promise<void> {
 
         await fs.access(launch.cwd);
 
+        // Resume spawns a child exactly like a fresh session does, so it needs
+        // the same locked-Keychain auth. Without it a resumed Claude reports
+        // "Not logged in" on a machine whose daemon cannot read the Keychain,
+        // while a freshly spawned one works.
+        const resumeAuthEnv = await claudeLockedKeychainAuthEnv(flavor);
+
         if (cancelledResumes.has(happySessionId)) {
           return { type: 'error', errorMessage: `Resume of session ${happySessionId} was cancelled by a stop request.` };
         }
@@ -959,6 +862,7 @@ export async function startDaemon(): Promise<void> {
           cwd: launch.cwd,
           reconnect: { happySessionId, happySessionMetadataFromLocalWebhook: metadata, encryption },
           env: buildSessionChildEnvironment(ambientEnvironment, {
+            ...resumeAuthEnv,
             HAPPY_RECONNECT_SESSION_ID: happySessionId,
             HAPPY_RECONNECT_ENCRYPTION_KEY: encodeBase64(encryption.encryptionKey),
             HAPPY_RECONNECT_ENCRYPTION_VARIANT: encryption.encryptionVariant,
