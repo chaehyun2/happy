@@ -146,18 +146,24 @@ model Project {
 }
 
 model SessionMessage {
-    id        String   @id @default(cuid())
+    id        String    @id @default(cuid())
     sessionId String
-    session   Session  @relation(fields: [sessionId], references: [id])
+    session   Session   @relation(fields: [sessionId], references: [id])
     localId   String?
     seq       Int
     /// [SessionMessageContent]
     content   Json
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    // Nothing writes this today: the fork's inline-image TTL was retired once
+    // upstream shipped encrypted attachments. The column and its index stay
+    // because the migration that adds them is already applied on the deployed
+    // database, and a schema without them reads as drift.
+    expiresAt DateTime?
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
 
     @@unique([sessionId, localId])
     @@index([sessionId, seq])
+    @@index([expiresAt])
 }
 
 //
