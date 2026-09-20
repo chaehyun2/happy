@@ -31,6 +31,8 @@ function fixture() {
         sessionId: 'fixture-session', path: '/fixture/project', hookSettingsPath: '/fixture/settings.json',
         queue: { size: () => 0 },
         consumeOneTimeFlags: vi.fn(),
+        // Fork: the launcher asks every loop whether an in-place restart is pending.
+        consumePendingResume: vi.fn(() => undefined),
         api: { push: () => ({ sendSessionNotification: notification }) },
         client: {
             sessionId: 'fixture-happy-session',

@@ -119,10 +119,15 @@ describe('remote plugin forwarding to the Claude Agent SDK', () => {
         expect(options).toMatchObject({
             cwd,
             plugins: [{ type: 'local', path: resolve(cwd, path) }],
-            permissionMode: 'default',
             settings: resolve(cwd, 'happy-settings.json'),
             allowedTools: ['Read'],
         });
+        // Fork: "Default" reaches the SDK unset, so Claude Code applies its own
+        // configuration instead of being pinned to `--permission-mode default`
+        // (mapToClaudeSdkPermissionMode). What this case is guarding is
+        // unchanged: --dangerously-skip-permissions must not escalate the
+        // session, and an unset mode escalates nothing.
+        expect(options.permissionMode).toBeUndefined();
         expect(options.extraArgs).toBeUndefined();
         expect(options.allowDangerouslySkipPermissions).toBeUndefined();
         const toolOptions = { signal: new AbortController().signal, toolUseID: 'fixture-tool', requestId: 'fixture-request' };

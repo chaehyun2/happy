@@ -1,6 +1,10 @@
-import { RpcHandlerManager } from "@/api/rpc/RpcHandlerManager";
-import { logger } from "@/lib";
-import { Session } from "./session";
+// Type-only so this handler adds nothing to the module graph: importing
+// RpcHandlerManager for its value pulls in apiSession -> registerCommonHandlers,
+// which reaches for node:child_process `exec` at import time and breaks any
+// suite that mocks that module partially (claudeRemoteLauncher.test.ts).
+import type { RpcHandlerManager } from "@/api/rpc/RpcHandlerManager";
+import type { Session } from "./session";
+import { logger } from "@/ui/logger";
 
 interface ResumeSessionRequest {
     // No parameters needed
