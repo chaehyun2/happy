@@ -114,6 +114,8 @@ describe('session action shortcuts', () => {
         expect(Object.keys(SESSION_ACTION_SHORTCUTS)).toEqual([
             'details',
             'resume',
+            // Fork: in-place restart, Alt+Shift+R.
+            'resume-in-place',
             'fork',
             'duplicate',
             'copy-metadata',
