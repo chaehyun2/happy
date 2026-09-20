@@ -848,7 +848,14 @@ export async function startDaemon(): Promise<void> {
         // the same locked-Keychain auth. Without it a resumed Claude reports
         // "Not logged in" on a machine whose daemon cannot read the Keychain,
         // while a freshly spawned one works.
-        const resumeAuthEnv = await claudeLockedKeychainAuthEnv(flavor);
+        //
+        // The agent comes from the launch, not from `metadata.flavor`: the
+        // builder infers it from the provider IDs too, so metadata carrying a
+        // codexThreadId but no flavor launches Codex while `flavor` above reads
+        // 'claude'. Taking it from the launch makes the credentials follow
+        // whatever binary is actually being started, which is the invariant
+        // that matters — Codex must never receive Claude's tokens.
+        const resumeAuthEnv = await claudeLockedKeychainAuthEnv(launch.args[0]);
 
         if (cancelledResumes.has(happySessionId)) {
           return { type: 'error', errorMessage: `Resume of session ${happySessionId} was cancelled by a stop request.` };

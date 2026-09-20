@@ -108,13 +108,20 @@ export async function claudeLockedKeychainAuthEnv(agent: string | undefined): Pr
     if (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN) {
         return {};
     }
-    const fileOauth = await readClaudeOAuthFromCredentialsFile();
-    if (!fileOauth) {
+    if (!await readClaudeOAuthFromCredentialsFile()) {
+        logger.debug('[DAEMON RUN] Leaving Claude auth to the session itself (no token in the credentials file)');
         return {};
     }
     const keychainState = await probeClaudeKeychainCredentials();
     if (keychainState !== 'locked') {
         logger.debug(`[DAEMON RUN] Leaving Claude auth to the session itself (keychain: ${keychainState})`);
+        return {};
+    }
+    // Read again rather than injecting the snapshot taken before the probe:
+    // another Claude process can rotate the file while `security` runs, and the
+    // token handed to the child should be the newest one on disk.
+    const fileOauth = await readClaudeOAuthFromCredentialsFile();
+    if (!fileOauth) {
         return {};
     }
     const authEnv: Record<string, string> = { CLAUDE_CODE_OAUTH_TOKEN: fileOauth.accessToken };

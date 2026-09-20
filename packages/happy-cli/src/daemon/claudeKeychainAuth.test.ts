@@ -7,8 +7,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('child_process', () => ({ execFile: mocks.execFile }));
 vi.mock('fs/promises', () => ({ default: { readFile: mocks.readFile } }));
-vi.mock('os', () => ({ default: { homedir: () => '/home/fixture' } }));
+vi.mock('os', () => ({ default: { homedir: () => '/home/fixture' }, homedir: () => '/home/fixture' }));
 vi.mock('@/ui/logger', () => ({ logger: { debug: vi.fn() } }));
+// buildResumeLaunch (used by the last describe) reaches @/configuration, which
+// creates directories at import time.
+vi.mock('@/configuration', () => ({ configuration: { serverUrl: 'http://test.invalid', happyHomeDir: '/test-only' } }));
+vi.mock('@/resume/localHappyAgentAuth', () => ({ hasLocalHappyAgentAuth: () => false, detectResumeSupport: () => ({}) }));
 
 import { claudeLockedKeychainAuthEnv } from './claudeKeychainAuth';
 
@@ -132,11 +136,49 @@ describe('claudeLockedKeychainAuthEnv', () => {
         expect(mocks.execFile).not.toHaveBeenCalled();
     });
 
+    it('injects the token the file holds after the probe, not before it', async () => {
+        // Another Claude process can rotate the file while `security` runs. The
+        // child should get the newest token on disk, not the one that was there
+        // when the probe started.
+        mocks.readFile
+            .mockResolvedValueOnce(JSON.stringify({ claudeAiOauth: { accessToken: 'stale' } }))
+            .mockResolvedValueOnce(JSON.stringify({ claudeAiOauth: { accessToken: 'rotated' } }));
+        keychainExits(36);
+
+        await expect(claudeLockedKeychainAuthEnv('claude')).resolves.toEqual({
+            CLAUDE_CODE_OAUTH_TOKEN: 'rotated',
+        });
+    });
+
     it('injects nothing off macOS, where there is no Keychain to be locked out of', async () => {
         setPlatform('linux');
         credentialsFile({ claudeAiOauth: { accessToken: 'access-1' } });
 
         await expect(claudeLockedKeychainAuthEnv('claude')).resolves.toEqual({});
         expect(mocks.execFile).not.toHaveBeenCalled();
+    });
+});
+
+describe('the agent a resume launch actually starts', () => {
+    // run.ts asks for auth with `launch.args[0]` rather than
+    // `metadata.flavor ?? 'claude'`, because the launch builder also infers the
+    // agent from the provider IDs. If that stops holding, a Codex child can be
+    // handed Claude's OAuth tokens.
+    it('is args[0], and is inferred from the provider ID when flavor is absent', async () => {
+        const { buildResumeLaunch } = await import('@/resume/handleResumeCommand');
+
+        const codex = buildResumeLaunch(
+            { id: 's1', active: true, metadata: { path: '/project', codexThreadId: 'thread-1' } as any },
+            { startedBy: 'daemon', claudeStartingMode: 'remote' },
+        );
+        // `metadata.flavor ?? 'claude'` — the value run.ts used before — reads
+        // 'claude' for this same metadata.
+        expect(codex.args[0]).toBe('codex');
+
+        const claude = buildResumeLaunch(
+            { id: 's2', active: true, metadata: { path: '/project', claudeSessionId: 'sess-1' } as any },
+            { startedBy: 'daemon', claudeStartingMode: 'remote' },
+        );
+        expect(claude.args[0]).toBe('claude');
     });
 });
